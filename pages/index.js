@@ -88,6 +88,30 @@ export default function Home() {
 
         newWcProvider.on("accountsChanged", handleAccountsChanged);
         newWcProvider.on("chainChanged", handleChainChanged);
+      } else if (selectedProvider.info.rdns.includes('trust')) {
+        // Trust Wallet specific implementation
+        if (typeof window.ethereum !== 'undefined' && window.ethereum.isTrust) {
+          await window.ethereum.request({ method: "eth_requestAccounts" });
+          ethersProvider = new ethers.BrowserProvider(window.ethereum, "any");
+          setProvider(window.ethereum);
+
+          window.ethereum.on("accountsChanged", handleAccountsChanged);
+          window.ethereum.on("chainChanged", handleChainChanged);
+        } else {
+          throw new Error("Trust Wallet is not installed");
+        }
+      } else if (selectedProvider.info.rdns.includes('coinbase')) {
+        // Coinbase Wallet specific implementation
+        if (typeof window.ethereum !== 'undefined' && window.ethereum.isCoinbaseWallet) {
+          await window.ethereum.request({ method: "eth_requestAccounts" });
+          ethersProvider = new ethers.BrowserProvider(window.ethereum, "any");
+          setProvider(window.ethereum);
+
+          window.ethereum.on("accountsChanged", handleAccountsChanged);
+          window.ethereum.on("chainChanged", handleChainChanged);
+        } else {
+          throw new Error("Coinbase Wallet is not installed");
+        }
       } else {
         await selectedProvider.provider.request({ method: "eth_requestAccounts" });
         ethersProvider = new ethers.BrowserProvider(selectedProvider.provider, "any");
@@ -190,30 +214,41 @@ export default function Home() {
       }
       console.log(`Switched to chain: ${formattedChainId}`);
 
-      await new Promise(resolve => {
-        const chainChangedHandler = (newChainId) => {
-          console.log(`Chain changed event received: ${newChainId}`);
+      // For Trust Wallet, we'll update the state immediately
+      if (provider && provider.isTrust) {
+        setChainId(targetChainId);
+        const newBrowserProvider = new ethers.BrowserProvider(provider, "any");
+        setBrowserProvider(newBrowserProvider);
+        const newSigner = await newBrowserProvider.getSigner();
+        setSigner(newSigner);
+        showSuccessToast("Network Switched", `Switched to ${chainConfig.chainName}`);
+      } else {
+        // For other wallets, we'll wait for the chainChanged event
+        await new Promise(resolve => {
+          const chainChangedHandler = (newChainId) => {
+            console.log(`Chain changed event received: ${newChainId}`);
+            if (wcProvider) {
+              wcProvider.removeListener("chainChanged", chainChangedHandler);
+            } else if (provider) {
+              provider.removeListener("chainChanged", chainChangedHandler);
+            }
+            resolve();
+          };
           if (wcProvider) {
-            wcProvider.removeListener("chainChanged", chainChangedHandler);
+            wcProvider.on("chainChanged", chainChangedHandler);
           } else if (provider) {
-            provider.removeListener("chainChanged", chainChangedHandler);
+            provider.on("chainChanged", chainChangedHandler);
           }
-          resolve();
-        };
-        if (wcProvider) {
-          wcProvider.on("chainChanged", chainChangedHandler);
-        } else if (provider) {
-          provider.on("chainChanged", chainChangedHandler);
-        }
-      });
+        });
 
-      const newBrowserProvider = await initializeProvider();
-      const newSigner = await newBrowserProvider.getSigner();
-      setSigner(newSigner);
+        const newBrowserProvider = await initializeProvider();
+        const newSigner = await newBrowserProvider.getSigner();
+        setSigner(newSigner);
 
-      console.log(`Provider re-initialized after chain switch. New chain ID: ${await newBrowserProvider.getNetwork().then(network => network.chainId)}`);
+        console.log(`Provider re-initialized after chain switch. New chain ID: ${await newBrowserProvider.getNetwork().then(network => network.chainId)}`);
 
-      showSuccessToast("Network Switched", `Switched to ${chainConfig.chainName}`);
+        showSuccessToast("Network Switched", `Switched to ${chainConfig.chainName}`);
+      }
     } catch (error) {
       console.error(`Error switching network:`, error);
       if (error.code === 4902 || (error.data && error.data.originalError && error.data.originalError.code === 4902) || 
