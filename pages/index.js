@@ -162,7 +162,7 @@ export default function Home() {
     setIsSwitchingChain(true);
     const chainConfig = CHAIN_CONFIG[chainName];
     if (!chainConfig) {
-      showErrorToast("Invalid Chain", `Invalid chain name: ${chainName}`);
+      // showErrorToast("Invalid Chain", `Invalid chain name: ${chainName}`);
       setIsSwitchingChain(false);
       return;
     }
