@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { ethers } from 'ethers';
 import { EthereumProvider } from '@walletconnect/ethereum-provider';
 import { CHAIN_CONFIG } from '../config/chains';
-import { ChakraProvider, Box, VStack, Heading, Select, Button, Image, Text, HStack, useToast, Table, Thead, Tbody, Tr, Th, Td, extendTheme, Spinner } from '@chakra-ui/react';
+import { ChakraProvider, Box, VStack, Heading, Select, Button, Image, Text, HStack, useToast, Table, Thead, Tbody, Tr, Th, Td, extendTheme } from '@chakra-ui/react';
 
 // Define the dark mode theme
 const theme = extendTheme({
@@ -11,6 +11,14 @@ const theme = extendTheme({
     useSystemColorMode: false,
   },
 });
+
+// Utility functions
+const sanitizeChainId = (chainId) =>
+  typeof chainId === "string" ? parseInt(chainId, 16) : Number(chainId);
+
+const showToast = (toast, title, description, status) => {
+  toast({ title, description, status, duration: 3000, isClosable: true });
+};
 
 export default function Home() {
   const [provider, setProvider] = useState(null);
@@ -27,15 +35,8 @@ export default function Home() {
   const [wcProvider, setWcProvider] = useState(null);
   const toast = useToast();
 
-  const showToast = (title, description, status) => {
-    toast({ title, description, status, duration: 3000, isClosable: true });
-  };
-
-  const showSuccessToast = (title, description) => showToast(title, description, "success");
-  const showErrorToast = (title, description) => showToast(title, description, "error");
-
-  const sanitizeChainId = (chainId) =>
-    typeof chainId === "string" ? parseInt(chainId, 16) : Number(chainId);
+  const showSuccessToast = (title, description) => showToast(toast, title, description, "success");
+  const showErrorToast = (title, description) => showToast(toast, title, description, "error");
 
   const initializeProvider = useCallback(async () => {
     if (!provider) return null;
@@ -127,14 +128,12 @@ export default function Home() {
     setSelectedWallet(null);
     setChainId(null);
     setWcProvider(null);
-    showToast("Wallet Disconnected", "Your wallet has been disconnected.", "info");
+    showToast(toast, "Wallet Disconnected", "Your wallet has been disconnected.", "info");
   };
 
   const handleAccountsChanged = (accounts) => {
     accounts.length === 0 ? disconnectWallet() : setAddress(accounts[0]);
   };
-
-  //
 
   const handleChainChanged = async (chainId) => {
     const newChainId = sanitizeChainId(chainId);
@@ -162,7 +161,6 @@ export default function Home() {
     setIsSwitchingChain(true);
     const chainConfig = CHAIN_CONFIG[chainName];
     if (!chainConfig) {
-      // showErrorToast("Invalid Chain", `Invalid chain name: ${chainName}`);
       setIsSwitchingChain(false);
       return;
     }
@@ -180,13 +178,11 @@ export default function Home() {
       }
 
       if (wcProvider) {
-        // WalletConnect v2 method
         await wcProvider.request({
           method: "wallet_switchEthereumChain",
           params: [{ chainId: formattedChainId }],
         });
       } else if (provider) {
-        // Web3 wallet method
         await provider.request({
           method: "wallet_switchEthereumChain",
           params: [{ chainId: formattedChainId }],
@@ -196,7 +192,6 @@ export default function Home() {
       }
       console.log(`Switched to chain: ${formattedChainId}`);
 
-      // Wait for the chainChanged event to be processed
       await new Promise(resolve => {
         const chainChangedHandler = (newChainId) => {
           console.log(`Chain changed event received: ${newChainId}`);
@@ -214,7 +209,6 @@ export default function Home() {
         }
       });
 
-      // Re-initialize the provider after the chain has changed
       const newBrowserProvider = await initializeProvider();
       const newSigner = await newBrowserProvider.getSigner();
       setSigner(newSigner);
@@ -250,13 +244,11 @@ export default function Home() {
     }];
 
     if (wcProvider) {
-      // WalletConnect v2 method
       await wcProvider.request({
         method: "wallet_addEthereumChain",
         params: params
       });
     } else if (provider) {
-      // Web3 wallet method
       await provider.request({
         method: "wallet_addEthereumChain",
         params: params
@@ -280,20 +272,16 @@ export default function Home() {
       console.log(`Preparing to send transaction on ${chainName} (Chain ID: ${targetChainId})`);
       console.log(`Current chain ID: ${chainId}`);
 
-      // Check if we're on the correct chain
       if (chainId !== targetChainId) {
         console.log(`Chain mismatch. Switching to ${chainName}...`);
         await switchChain(chainName);
 
-        // Wait for the chain switch to take effect
         await new Promise(resolve => setTimeout(resolve, 2000));
 
-        // Re-initialize the provider and signer after chain switch
         const newBrowserProvider = await initializeProvider();
         const newSigner = await newBrowserProvider.getSigner();
         setSigner(newSigner);
 
-        // Re-check the chain after switching
         const currentChainId = await newBrowserProvider.getNetwork().then(network => sanitizeChainId(network.chainId));
         console.log(`After switch: Current chain ID: ${currentChainId}, Target chain ID: ${targetChainId}`);
         if (currentChainId !== targetChainId) {
@@ -301,7 +289,6 @@ export default function Home() {
         }
       }
 
-      // Now that we're sure we're on the correct chain, prepare and send the transaction
       const address = await signer.getAddress();
       const nonce = await browserProvider.getTransactionCount(address);
       const gasLimit = await browserProvider.estimateGas({
