@@ -18,7 +18,7 @@ const sanitizeChainId = (chainId) =>
   typeof chainId === "string" ? parseInt(chainId, 16) : Number(chainId);
 
 const showToast = (toast, title, description, status) => {
-  toast({ title, description, status, duration: 3000, isClosable: true });
+  toast({ title, description, status, duration: 2000, isClosable: true });
 };
 
 export default function Home() {
@@ -39,10 +39,11 @@ export default function Home() {
 
   const showSuccessToast = (title, description) => showToast(toast, title, description, "success");
   const showErrorToast = (title, description) => showToast(toast, title, description, "error");
+  const showWarningToast = (title, description) => showToast(toast, title, description, "warning");
 
   const initializeProvider = useCallback(async () => {
     if (!provider) return null;
-    const newBrowserProvider = new ethers.BrowserProvider(provider, "any");
+    // const newBrowserProvider = new ethers.BrowserProvider(provider, "any");
     const network = await newBrowserProvider.getNetwork();
     console.log("Initialize provider network:", network);
     setBrowserProvider(newBrowserProvider);
@@ -90,9 +91,13 @@ export default function Home() {
 
         newWcProvider.on("accountsChanged", handleAccountsChanged);
         newWcProvider.on("chainChanged", handleChainChanged);
+        newWcProvider.on("disconnect", () => {
+          disconnectWallet();
+        });
       } else if (selectedProvider.info.rdns.includes('trust')) {
         // Trust Wallet specific implementation
         if (typeof window.ethereum !== 'undefined' && window.ethereum.isTrust) {
+          console.log(isTrust);
           await window.ethereum.request({ method: "eth_requestAccounts" });
           ethersProvider = new ethers.BrowserProvider(window.ethereum, "any");
           setProvider(window.ethereum);
@@ -161,9 +166,9 @@ export default function Home() {
         provider?.disconnect();
         // Clean up manually
         Object.keys(window.localStorage)
-          .filter(key => 
-            key.includes('__WalletLink__') || 
-            key.includes('-coinbaseWallet:') || 
+          .filter(key =>
+            key.includes('__WalletLink__') ||
+            key.includes('-coinbaseWallet:') ||
             key.includes('-walletlink:')
           )
           .forEach(keyToRemove => localStorage.removeItem(keyToRemove));
@@ -233,21 +238,28 @@ export default function Home() {
 
       const activeProvider = wcProvider || provider;
 
-      try {
-        await activeProvider.request({
+      if (wcProvider) {
+        await wcProvider.request({
           method: "wallet_switchEthereumChain",
           params: [{ chainId: formattedChainId }],
         });
-      } catch (switchError) {
-        // This error code indicates that the chain has not been added to MetaMask.
-        if (switchError.code === 4902) {
-          try {
-            await addNetwork(chainConfig, formattedChainId);
-          } catch (addError) {
-            throw addError;
+      } else {
+        try {
+          await activeProvider.request({
+            method: "wallet_switchEthereumChain",
+            params: [{ chainId: formattedChainId }],
+          });
+        } catch (switchError) {
+          // This error code indicates that the chain has not been added to MetaMask.
+          if (switchError.code === 4902) {
+            try {
+              await addNetwork(chainConfig, formattedChainId);
+            } catch (addError) {
+              throw addError;
+            }
+          } else {
+            throw switchError;
           }
-        } else {
-          throw switchError;
         }
       }
 
@@ -261,7 +273,7 @@ export default function Home() {
           resolve();
         };
         activeProvider.on("chainChanged", chainChangedHandler);
-        
+
         // Set a timeout in case the event doesn't fire
         setTimeout(() => {
           activeProvider.removeListener("chainChanged", chainChangedHandler);
@@ -277,6 +289,16 @@ export default function Home() {
       setChainId(newChainId);
 
       console.log(`Provider re-initialized after chain switch. New chain ID: ${newChainId}`);
+
+      // For WalletConnect v2, emit the chainChanged event manually
+      if (wcProvider) {
+        try {
+          wcProvider.emit("chainChanged", `eip155:${newChainId}`);
+        } catch (error) {
+          console.warn("Error emitting chainChanged event:", error);
+          showWarningToast("Chain Switch Warning", "Chain switched successfully, but there was an issue updating the UI. Please refresh if you encounter any problems.");
+        }
+      }
 
       showSuccessToast("Network Switched", `Switched to ${chainConfig.chainName}`);
     } catch (error) {
