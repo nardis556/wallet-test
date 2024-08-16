@@ -134,6 +134,8 @@ export default function Home() {
     accounts.length === 0 ? disconnectWallet() : setAddress(accounts[0]);
   };
 
+  //
+
   const handleChainChanged = async (chainId) => {
     const newChainId = sanitizeChainId(chainId);
     console.log(`Chain changed to: ${newChainId}`);
