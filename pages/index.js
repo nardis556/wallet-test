@@ -104,9 +104,9 @@ export default function Home() {
         }
       } else if (selectedProvider.info.rdns.includes('coinbase')) {
         let ethereum;
-        if (typeof window.ethereum !== 'undefined' && window.ethereum.isCoinbaseWallet) {
-          // We're in Coinbase Wallet's browser
-          ethereum = window.ethereum;
+        if (typeof window.ethereum !== 'undefined' && (window.ethereum.isCoinbaseWallet || window.ethereum.providers?.some(p => p.isCoinbaseWallet))) {
+          // We're in Coinbase Wallet's browser or have Coinbase Wallet extension
+          ethereum = window.ethereum.isCoinbaseWallet ? window.ethereum : window.ethereum.providers.find(p => p.isCoinbaseWallet);
         } else {
           // We're in a regular browser, initialize the SDK
           const coinbaseWallet = new CoinbaseWalletSDK({
