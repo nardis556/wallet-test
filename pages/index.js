@@ -328,6 +328,7 @@ export default function Home() {
         console.log(`Chain mismatch. Switching to ${chainName}...`);
         await switchChain(chainName);
 
+        // Wait for the chain to be fully switched
         await new Promise(resolve => setTimeout(resolve, 2000));
 
         const newBrowserProvider = await initializeProvider();
@@ -350,7 +351,7 @@ export default function Home() {
         nonce: nonce,
         data: "0x",
         chainId: targetChainId,
-        type: 2
+        // type: 2
       };
 
       console.log(`Sending transaction:`, transaction);
