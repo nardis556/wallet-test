@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
-import { ethers } from 'ethers';
+import { ethers, BrowserProvider } from 'ethers';
 import { EthereumProvider } from '@walletconnect/ethereum-provider';
 import { CHAIN_CONFIG } from '../config/chains';
 import { ChakraProvider, Box, VStack, Heading, Select, Button, Image, Text, HStack, useToast, Table, Thead, Tbody, Tr, Th, Td, extendTheme } from '@chakra-ui/react';
+import CoinbaseWalletSDK from '@coinbase/wallet-sdk';
 
 // Define the dark mode theme
 const theme = extendTheme({
@@ -33,6 +34,7 @@ export default function Home() {
   const [isSendingTransaction, setIsSendingTransaction] = useState(false);
   const [isClearing, setIsClearing] = useState(false);
   const [wcProvider, setWcProvider] = useState(null);
+  const [coinbaseWallet, setCoinbaseWallet] = useState(null);
   const toast = useToast();
 
   const showSuccessToast = (title, description) => showToast(toast, title, description, "success");
@@ -101,17 +103,27 @@ export default function Home() {
           throw new Error("Trust Wallet is not installed");
         }
       } else if (selectedProvider.info.rdns.includes('coinbase')) {
-        // Coinbase Wallet specific implementation
+        let ethereum;
         if (typeof window.ethereum !== 'undefined' && window.ethereum.isCoinbaseWallet) {
-          await window.ethereum.request({ method: "eth_requestAccounts" });
-          ethersProvider = new ethers.BrowserProvider(window.ethereum, "any");
-          setProvider(window.ethereum);
-
-          window.ethereum.on("accountsChanged", handleAccountsChanged);
-          window.ethereum.on("chainChanged", handleChainChanged);
+          // We're in Coinbase Wallet's browser
+          ethereum = window.ethereum;
         } else {
-          throw new Error("Coinbase Wallet is not installed");
+          // We're in a regular browser, initialize the SDK
+          const coinbaseWallet = new CoinbaseWalletSDK({
+            appName: 'test',
+            appLogoUrl: 'https://ih1.redbubble.net/image.5300012176.7382/bg,f8f8f8-flat,750x,075,f-pad,750x1000,f8f8f8.jpg',
+            darkMode: true
+          });
+          ethereum = coinbaseWallet.makeWeb3Provider();
+          setCoinbaseWallet(coinbaseWallet);
         }
+
+        await ethereum.request({ method: 'eth_requestAccounts' });
+        ethersProvider = new ethers.BrowserProvider(ethereum, "any");
+        setProvider(ethereum);
+
+        ethereum.on("accountsChanged", handleAccountsChanged);
+        ethereum.on("chainChanged", handleChainChanged);
       } else {
         await selectedProvider.provider.request({ method: "eth_requestAccounts" });
         ethersProvider = new ethers.BrowserProvider(selectedProvider.provider, "any");
@@ -143,6 +155,20 @@ export default function Home() {
   const disconnectWallet = () => {
     if (wcProvider?.disconnect) wcProvider.disconnect();
     if (provider?.disconnect) provider.disconnect();
+    if (coinbaseWallet) {
+      // Coinbase Wallet specific disconnection
+      setTimeout(() => {
+        provider?.disconnect();
+        // Clean up manually
+        Object.keys(window.localStorage)
+          .filter(key => 
+            key.includes('__WalletLink__') || 
+            key.includes('-coinbaseWallet:') || 
+            key.includes('-walletlink:')
+          )
+          .forEach(keyToRemove => localStorage.removeItem(keyToRemove));
+      }, 2000);
+    }
     setProvider(null);
     setBrowserProvider(null);
     setSigner(null);
@@ -150,6 +176,7 @@ export default function Home() {
     setSelectedWallet(null);
     setChainId(null);
     setWcProvider(null);
+    setCoinbaseWallet(null);
     showToast(toast, "Wallet Disconnected", "Your wallet has been disconnected.", "info");
   };
 
@@ -184,6 +211,7 @@ export default function Home() {
     const chainConfig = CHAIN_CONFIG[chainName];
     if (!chainConfig) {
       setIsSwitchingChain(false);
+      showErrorToast("Invalid Chain", `Chain ${chainName} is not configured.`);
       return;
     }
 
@@ -199,23 +227,34 @@ export default function Home() {
         return;
       }
 
-      if (wcProvider) {
-        await wcProvider.request({
-          method: "wallet_switchEthereumChain",
-          params: [{ chainId: formattedChainId }],
-        });
-      } else if (provider) {
-        await provider.request({
-          method: "wallet_switchEthereumChain",
-          params: [{ chainId: formattedChainId }],
-        });
-      } else {
-        throw new Error("No provider available");
+      if (!wcProvider && !provider) {
+        throw new Error("No provider available. Please connect a wallet first.");
       }
+
+      const activeProvider = wcProvider || provider;
+
+      try {
+        await activeProvider.request({
+          method: "wallet_switchEthereumChain",
+          params: [{ chainId: formattedChainId }],
+        });
+      } catch (switchError) {
+        // This error code indicates that the chain has not been added to MetaMask.
+        if (switchError.code === 4902) {
+          try {
+            await addNetwork(chainConfig, formattedChainId);
+          } catch (addError) {
+            throw addError;
+          }
+        } else {
+          throw switchError;
+        }
+      }
+
       console.log(`Switched to chain: ${formattedChainId}`);
 
-      // For Trust Wallet, we'll update the state immediately
-      if (provider && provider.isTrust) {
+      // For Trust Wallet and Coinbase Wallet, we'll update the state immediately
+      if (provider && (provider.isTrust || provider.isCoinbaseWallet)) {
         setChainId(targetChainId);
         const newBrowserProvider = new ethers.BrowserProvider(provider, "any");
         setBrowserProvider(newBrowserProvider);
@@ -227,18 +266,10 @@ export default function Home() {
         await new Promise(resolve => {
           const chainChangedHandler = (newChainId) => {
             console.log(`Chain changed event received: ${newChainId}`);
-            if (wcProvider) {
-              wcProvider.removeListener("chainChanged", chainChangedHandler);
-            } else if (provider) {
-              provider.removeListener("chainChanged", chainChangedHandler);
-            }
+            activeProvider.removeListener("chainChanged", chainChangedHandler);
             resolve();
           };
-          if (wcProvider) {
-            wcProvider.on("chainChanged", chainChangedHandler);
-          } else if (provider) {
-            provider.on("chainChanged", chainChangedHandler);
-          }
+          activeProvider.on("chainChanged", chainChangedHandler);
         });
 
         const newBrowserProvider = await initializeProvider();
@@ -251,17 +282,7 @@ export default function Home() {
       }
     } catch (error) {
       console.error(`Error switching network:`, error);
-      if (error.code === 4902 || (error.data && error.data.originalError && error.data.originalError.code === 4902) ||
-        (error.code === -32603 && error.message.includes("Unrecognized chain ID"))) {
-        try {
-          await addNetwork(chainConfig, formattedChainId);
-          showSuccessToast("Network Added", `Added and switched to ${chainConfig.chainName}`);
-        } catch (addError) {
-          showErrorToast("Network Addition Failed", `Failed to add ${chainConfig.chainName}: ${addError.message}`);
-        }
-      } else {
-        showErrorToast("Network Switch Failed", `Failed to switch to ${chainConfig.chainName}: ${error.message}`);
-      }
+      showErrorToast("Network Switch Failed", `Failed to switch to ${chainConfig.chainName}: ${error.message}`);
     } finally {
       setIsSwitchingChain(false);
     }
@@ -290,7 +311,6 @@ export default function Home() {
       throw new Error("No provider available");
     }
     console.log(`Added network: ${chainConfig.chainName}`);
-    await switchChain(chainConfig.chainName);
   };
 
   const sendTransaction = async (chainName) => {
@@ -324,25 +344,15 @@ export default function Home() {
 
       const address = await signer.getAddress();
       const nonce = await browserProvider.getTransactionCount(address);
-      // const gasLimit = await browserProvider.estimateGas({
-      //   to: address,
-      //   value: ethers.parseEther("0"),
-      // });
 
       let transaction = {
         to: address,
         value: ethers.parseEther("0"),
         nonce: nonce,
         data: "0x",
-        // gasLimit: (gasLimit * BigInt(120)) / BigInt(100),
         chainId: targetChainId,
         type: 2
       };
-
-      // const feeData = await browserProvider.getFeeData();
-      // transaction.maxFeePerGas = feeData.maxFeePerGas;
-      // transaction.maxPriorityFeePerGas = feeData.maxPriorityFeePerGas;
-      // transaction.type = 2;
 
       console.log(`Sending transaction:`, transaction);
 
