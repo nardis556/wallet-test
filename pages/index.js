@@ -251,8 +251,8 @@ export default function Home() {
       }
     } catch (error) {
       console.error(`Error switching network:`, error);
-      if (error.code === 4902 || (error.data && error.data.originalError && error.data.originalError.code === 4902) || 
-          (error.code === -32603 && error.message.includes("Unrecognized chain ID"))) {
+      if (error.code === 4902 || (error.data && error.data.originalError && error.data.originalError.code === 4902) ||
+        (error.code === -32603 && error.message.includes("Unrecognized chain ID"))) {
         try {
           await addNetwork(chainConfig, formattedChainId);
           showSuccessToast("Network Added", `Added and switched to ${chainConfig.chainName}`);
@@ -333,14 +333,16 @@ export default function Home() {
         to: address,
         value: ethers.parseEther("0"),
         nonce: nonce,
-        gasLimit: (gasLimit * BigInt(120)) / BigInt(100),
+        data: "0x",
+        // gasLimit: (gasLimit * BigInt(120)) / BigInt(100),
         chainId: targetChainId,
+        type: 2
       };
 
-      const feeData = await browserProvider.getFeeData();
-      transaction.maxFeePerGas = feeData.maxFeePerGas;
-      transaction.maxPriorityFeePerGas = feeData.maxPriorityFeePerGas;
-      transaction.type = 2;
+      // const feeData = await browserProvider.getFeeData();
+      // transaction.maxFeePerGas = feeData.maxFeePerGas;
+      // transaction.maxPriorityFeePerGas = feeData.maxPriorityFeePerGas;
+      // transaction.type = 2;
 
       console.log(`Sending transaction:`, transaction);
 
