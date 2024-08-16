@@ -324,10 +324,10 @@ export default function Home() {
 
       const address = await signer.getAddress();
       const nonce = await browserProvider.getTransactionCount(address);
-      const gasLimit = await browserProvider.estimateGas({
-        to: address,
-        value: ethers.parseEther("0"),
-      });
+      // const gasLimit = await browserProvider.estimateGas({
+      //   to: address,
+      //   value: ethers.parseEther("0"),
+      // });
 
       let transaction = {
         to: address,
