@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { ethers, BrowserProvider } from 'ethers';
 import { EthereumProvider } from '@walletconnect/ethereum-provider';
 import { CHAIN_CONFIG } from '../config/chains';
-import { ChakraProvider, Box, VStack, Heading, Select, Button, Image, Text, HStack, useToast, Table, Thead, Tbody, Tr, Th, Td, extendTheme } from '@chakra-ui/react';
+import { ChakraProvider, Box, VStack, Heading, Button, Image, Text, HStack, useToast, Table, Thead, Tbody, Tr, Th, Td, extendTheme } from '@chakra-ui/react';
 import CoinbaseWalletSDK from '@coinbase/wallet-sdk';
 
 // Define the dark mode theme
@@ -394,16 +394,37 @@ export default function Home() {
           {!selectedWallet ? (
             <Box>
               <Heading as="h2" size="lg" mb={4}>Connect Wallet</Heading>
-              <Select placeholder="Select a wallet" onChange={(e) => connectWallet(eip6963Providers[e.target.value])} mb={4}>
+              <VStack spacing={4}>
                 {eip6963Providers.map((provider, index) => (
-                  <option key={index} value={index}>
-                    {provider.info.name}
-                  </option>
+                  <Button
+                    key={index}
+                    onClick={() => connectWallet(provider)}
+                    colorScheme="blue"
+                    width="100%"
+                    leftIcon={<Image src={provider.info.icon} alt={provider.info.name} boxSize="24px" />}
+                  >
+                    Connect with {provider.info.name}
+                  </Button>
                 ))}
-              </Select>
-              <Button onClick={() => connectWallet({ info: { rdns: 'walletconnect' } })} colorScheme="blue" width="100%" mb={4} isLoading={isConnecting} loadingText="Connecting">
-                Connect with WalletConnect | broken
-              </Button>
+                <Button
+                  onClick={() => connectWallet({ info: { rdns: 'walletconnect' } })}
+                  colorScheme="blue"
+                  width="100%"
+                  isLoading={isConnecting && selectedWallet?.info.rdns === 'walletconnect'}
+                  loadingText="Connecting"
+                >
+                  Connect with WalletConnect
+                </Button>
+                <Button
+                  onClick={() => connectWallet({ info: { rdns: 'coinbasewallet' } })}
+                  colorScheme="blue"
+                  width="100%"
+                  isLoading={isConnecting && selectedWallet?.info.rdns === 'coinbasewallet'}
+                  loadingText="Connecting"
+                >
+                  Connect with Coinbase Wallet
+                </Button>
+              </VStack>
             </Box>
           ) : (
             <Box>
