@@ -43,7 +43,7 @@ export default function Home() {
 
   const initializeProvider = useCallback(async () => {
     if (!provider) return null;
-    // const newBrowserProvider = new ethers.BrowserProvider(provider, "any");
+    const newBrowserProvider = new ethers.BrowserProvider(provider, "any");
     const network = await newBrowserProvider.getNetwork();
     console.log("Initialize provider network:", network);
     setBrowserProvider(newBrowserProvider);
@@ -85,7 +85,7 @@ export default function Home() {
           optionalChains: Object.values(CHAIN_CONFIG).map(config => sanitizeChainId(config.chainId)),
         });
         await newWcProvider.enable();
-        ethersProvider = new ethers.BrowserProvider(newWcProvider);
+        ethersProvider = new ethers.BrowserProvider(newWcProvider, "any");
         setProvider(newWcProvider);
         setWcProvider(newWcProvider);
 
@@ -97,7 +97,7 @@ export default function Home() {
       } else if (selectedProvider.info.rdns.includes('trust')) {
         // Trust Wallet specific implementation
         if (typeof window.ethereum !== 'undefined' && window.ethereum.isTrust) {
-          console.log(isTrust);
+          console.log(window.ethereum.isTrust);
           await window.ethereum.request({ method: "eth_requestAccounts" });
           ethersProvider = new ethers.BrowserProvider(window.ethereum, "any");
           setProvider(window.ethereum);
