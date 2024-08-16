@@ -253,33 +253,32 @@ export default function Home() {
 
       console.log(`Switched to chain: ${formattedChainId}`);
 
-      // For Trust Wallet and Coinbase Wallet, we'll update the state immediately
-      if (provider && (provider.isTrust || provider.isCoinbaseWallet)) {
-        setChainId(targetChainId);
-        const newBrowserProvider = new ethers.BrowserProvider(provider, "any");
-        setBrowserProvider(newBrowserProvider);
-        const newSigner = await newBrowserProvider.getSigner();
-        setSigner(newSigner);
-        showSuccessToast("Network Switched", `Switched to ${chainConfig.chainName}`);
-      } else {
-        // For other wallets, we'll wait for the chainChanged event
-        await new Promise(resolve => {
-          const chainChangedHandler = (newChainId) => {
-            console.log(`Chain changed event received: ${newChainId}`);
-            activeProvider.removeListener("chainChanged", chainChangedHandler);
-            resolve();
-          };
-          activeProvider.on("chainChanged", chainChangedHandler);
-        });
+      // Wait for the chainChanged event
+      await new Promise((resolve) => {
+        const chainChangedHandler = (newChainId) => {
+          console.log(`Chain changed event received: ${newChainId}`);
+          activeProvider.removeListener("chainChanged", chainChangedHandler);
+          resolve();
+        };
+        activeProvider.on("chainChanged", chainChangedHandler);
+        
+        // Set a timeout in case the event doesn't fire
+        setTimeout(() => {
+          activeProvider.removeListener("chainChanged", chainChangedHandler);
+          resolve();
+        }, 5000);
+      });
 
-        const newBrowserProvider = await initializeProvider();
-        const newSigner = await newBrowserProvider.getSigner();
-        setSigner(newSigner);
+      // Re-initialize the provider and update state
+      const newBrowserProvider = await initializeProvider();
+      const newSigner = await newBrowserProvider.getSigner();
+      setSigner(newSigner);
+      const newChainId = await newBrowserProvider.getNetwork().then(network => sanitizeChainId(network.chainId));
+      setChainId(newChainId);
 
-        console.log(`Provider re-initialized after chain switch. New chain ID: ${await newBrowserProvider.getNetwork().then(network => network.chainId)}`);
+      console.log(`Provider re-initialized after chain switch. New chain ID: ${newChainId}`);
 
-        showSuccessToast("Network Switched", `Switched to ${chainConfig.chainName}`);
-      }
+      showSuccessToast("Network Switched", `Switched to ${chainConfig.chainName}`);
     } catch (error) {
       console.error(`Error switching network:`, error);
       showErrorToast("Network Switch Failed", `Failed to switch to ${chainConfig.chainName}: ${error.message}`);
