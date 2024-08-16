@@ -85,7 +85,7 @@ export default function Home() {
           optionalChains: Object.values(CHAIN_CONFIG).map(config => sanitizeChainId(config.chainId)),
         });
         await newWcProvider.enable();
-        ethersProvider = new ethers.BrowserProvider(newWcProvider, "any");
+        ethersProvider = new ethers.BrowserProvider(newWcProvider);
         setProvider(newWcProvider);
         setWcProvider(newWcProvider);
 
