@@ -85,10 +85,16 @@ export default function Home() {
         ethersProvider = new ethers.BrowserProvider(newWcProvider, "any");
         setProvider(newWcProvider);
         setWcProvider(newWcProvider);
+
+        newWcProvider.on("accountsChanged", handleAccountsChanged);
+        newWcProvider.on("chainChanged", handleChainChanged);
       } else {
         await selectedProvider.provider.request({ method: "eth_requestAccounts" });
         ethersProvider = new ethers.BrowserProvider(selectedProvider.provider, "any");
         setProvider(selectedProvider.provider);
+
+        selectedProvider.provider.on("accountsChanged", handleAccountsChanged);
+        selectedProvider.provider.on("chainChanged", handleChainChanged);
       }
 
       const signer = await ethersProvider.getSigner();
@@ -100,14 +106,6 @@ export default function Home() {
       setAddress(account);
       setChainId(sanitizeChainId(network.chainId));
       setSelectedWallet(selectedProvider.info);
-
-      if (selectedProvider.info.rdns.includes('walletconnect')) {
-        newWcProvider.on("accountsChanged", handleAccountsChanged);
-        newWcProvider.on("chainChanged", handleChainChanged);
-      } else {
-        selectedProvider.provider.on("accountsChanged", handleAccountsChanged);
-        selectedProvider.provider.on("chainChanged", handleChainChanged);
-      }
 
       showSuccessToast("Wallet Connected", `Connected to account ${account.slice(0, 6)}...${account.slice(-4)}`);
     } catch (error) {
